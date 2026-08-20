@@ -208,8 +208,8 @@ If you use this code or the port-Hamiltonian hypergraph framework in your resear
   title   = {Guaranteeing thermodynamically consistent multiphysics
              modeling by use of port-{H}amiltonian hypergraphs},
   author  = {Hussan, Jagir R. and Omholt, Stig W. and Hunter, Peter J.},
-  journal = {(2025)},
-  year    = {2025},
+  journal = {(2026)},
+  year    = {2026},
   note    = {Auckland Bioengineering Institute, University of Auckland;
              Kavli Institute for Systems Neuroscience, NTNU}
 }
