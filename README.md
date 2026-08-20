@@ -33,6 +33,7 @@ The codebase supports three core demonstrations described in the manuscript:
 ├── main.tex                         Manuscript source
 ├── phs_models.py                    Canonical equations, parameters, and derivations
 ├── phs_hetero_core.py               Numba-JIT 2D tissue simulation kernel
+├── parameters.md                    Summary of model and simulation parameters
 │
 ├── Figure1.py                       3-cell cluster validation (→ figures/panel_*.pdf)
 ├── FigureS1.py                      FCU internal consistency audit (→ figures/S1.pdf)

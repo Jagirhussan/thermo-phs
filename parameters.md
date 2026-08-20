@@ -2,7 +2,7 @@
 
 Comprehensive parameter reference for all models and simulations in:
 
-> Hussan, Omholt & Hunter, *"Guaranteeing thermodynamically consistent multiphysics modeling by use of port-Hamiltonian hypergraphs"* (2025)
+> Hussan, Omholt & Hunter, *"Guaranteeing thermodynamically consistent multiphysics modeling by use of port-Hamiltonian hypergraphs"* (2026)
 
 ---
 
@@ -240,4 +240,4 @@ Used exclusively in Figure S1 to validate the pure Dirac structure (all AP kinet
 
 ---
 
-*Generated from the codebase at `phs_models.py` and all figure/experiment scripts. Last updated 2025-08-20.*
+ Last updated 2025-08-20.
