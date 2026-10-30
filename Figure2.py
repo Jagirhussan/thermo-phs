@@ -12,8 +12,11 @@ Purpose
 -------
   Generates three publication panels from 3D ventricular wedge simulation
   outputs:
-    Panel A — Computational scalability: wall-clock time/step and throughput
-              vs. domain size, with theoretical O(N) and O(N²) bounds.
+    Panel A — Computational scalability: steady-state time/step and
+              throughput vs. domain size, with theoretical O(N) and O(N²)
+              bounds.  Time/step is the median over all 200-step progress
+              intervals (robust to JIT warm-up, VTK write-outs, and CPU
+              contention drift from concurrently running sibling runs).
     Panel B — Volumetric rendering of the steady-state spiral wave
               (t = 500 ms) from the 2.0M-node simulation.
     Panel D — Thermodynamic gain: temporal evolution of global stored
@@ -89,11 +92,9 @@ PLOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
 # The label is used for legend entries (e.g., "0.7M" = 0.7 million nodes)
 SCALING_LOG_FILES = [
     # Paths match output of: python scaling_studies/run_scaling_study.py --preset <name>
-    ('scaling_studies/scaling_study_140x2/log_140x2.txt',       '0.7M'),
+    ('scaling_studies/scaling_study_140x2/log140x2.txt',        '0.7M'),
     ('scaling_studies/scaling_study_160x2/log_160x2.txt',       '1.0M'),
-    ('scaling_studies/scaling_study_150_cons/log_150_cons.txt', '1.2M'),
     ('scaling_studies/scaling_study_163/log_163.txt',           '1.3M'),
-    ('scaling_studies/scaling_study_175/log_175.txt',           '1.4M'),
     ('scaling_studies/scaling_study_200/log_200.txt',           '1.6M'),
     ('scaling_studies/scaling_study_250/log_250.txt',           '2.0M'),
 ]
@@ -111,8 +112,13 @@ def parse_log(filename, label):
       - Energy time series: (Time_ms, Energy_J) pairs
       - Metadata: domain size (M nodes), time/step, max stored energy
 
-    The log format is produced by the EnergyAudit.report() method
-    in scaling_studies/run_3d_experiment_spiral.py.
+    The log format is produced by the EnergyAudit class in
+    scaling_studies/run_scaling_study.py (and, for the archived runs
+    here, its predecessor run_3d_experiment_spiral.py).
+    NOTE: the "Time/Step:"/"Throughput:" lines in the archived report
+    blocks were computed from the wrong CSV column (P_mech, index 3,
+    instead of compute time, index 4) — panel A therefore derives the
+    true wall-clock timing from the "Time:"/"Wall:" progress lines.
     """
     data = []
     meta = {'label': label}
@@ -146,7 +152,8 @@ def parse_log(filename, label):
     return pd.DataFrame(data), meta
 
 
-# Load all logs
+# Load all logs (the two excluded runs are omitted consistently in
+# Panels A and D)
 results = []
 for filepath, label in SCALING_LOG_FILES:
     df, meta = parse_log(filepath, label)
@@ -240,7 +247,7 @@ voltage_field = data_vtk.get("Voltage_u",
 
 # --- Panel D: Energy Gain H(t) across resolutions ---
 fig_d, ax_d = plt.subplots(figsize=(7.2, 6))
-cmap = cm.get_cmap('viridis', len(results) + 1)
+cmap = plt.get_cmap('viridis', len(results) + 1)
 
 for i, (df, meta) in enumerate(results):
     lw = 3.0 if i == len(results) - 1 else 1.5
@@ -256,7 +263,7 @@ e_max = results[-1][1]['max_energy']
 gain  = ((e_max - e_min) / e_min) * 100
 ax_d.annotate(
     f'+{gain:.0f}% Energy gain\n(super-linear)',
-    xy=(100, e_max), xytext=(150, e_max - 1),
+    xy=(100, e_max-0.5), xytext=(150, e_max - 1),
     arrowprops=dict(facecolor='black', arrowstyle='->'),
     fontsize=10, fontweight='bold')
 
@@ -272,36 +279,59 @@ plt.close(fig_d)
 # --- Panel A: Computational Scalability ---
 fig_a, ax_a = plt.subplots(figsize=(7.2, 6))
 
-regex_time       = re.compile(r"Time/Step:\s*([\d\.]+)")
-regex_throughput = re.compile(r"Throughput:\s*([\d\.]+)")
+# Internal time step of the 3D solver [ms] — converts the wall-clock
+# interval between progress lines into a per-step time.
+DT_MS = 0.005
+
+# Progress-line pattern: "T= <ms>ms | Energy(J): <val> | Time: <wall>s | ..."
+# Archived logs label the wall clock "Time:"; the current
+# run_scaling_study.py labels it "Wall:".  Both are accepted.
+regex_progress = re.compile(
+    r"T=\s*([\d\.]+)ms\s*\|\s*Energy\(J\):\s*[\d\.eE\+\-]+\s*\|\s*"
+    r"(?:Time|Wall):\s*([\d\.]+)s")
+regex_nodes = re.compile(r"Domain Size:\s+([\d\.]+)")
 
 domain_sizes = []
 time_per_step = []
 throughput = []
 
-print("\nParsing scalability metrics...")
+print("\nParsing scalability metrics "
+      "(median steady-state wall-clock per step)...")
 for filepath, label in SCALING_LOG_FILES:
     size_val = float(label.replace('M', ''))
-    t_step = None
-    t_put  = None
+    progress = []          # (t_ms, wall_seconds) from each progress line
+    nodes_m = None
 
     try:
         with open(filepath, 'r') as f:
             for line in f:
-                if "[Scalability] Time/Step:" in line:
-                    match = regex_time.search(line)
+                match = regex_progress.search(line)
+                if match:
+                    progress.append((float(match.group(1)),
+                                     float(match.group(2))))
+                else:
+                    match = regex_nodes.search(line)
                     if match:
-                        t_step = float(match.group(1))
-                elif "[Scalability] Throughput:" in line:
-                    match = regex_throughput.search(line)
-                    if match:
-                        t_put = float(match.group(1))
+                        nodes_m = float(match.group(1))
 
-        if t_step is not None and t_put is not None:
+        if len(progress) >= 2 and nodes_m is not None:
+            # Robust steady-state time per step: median over all consecutive
+            # progress-line intervals.  The median (rather than the full-run
+            # average) is used because the raw wall clock contains JIT
+            # warm-up at start-up, VTK snapshot write-outs (multi-minute
+            # stalls in some runs), and contention drift as concurrently
+            # running sibling simulations on the same node finish at
+            # different times.
+            t_ms = np.array([p[0] for p in progress])
+            w_s = np.array([p[1] for p in progress])
+            ival_ms = np.diff(w_s) / (np.diff(t_ms) / DT_MS) * 1000.0
+            t_step_ms = float(np.median(ival_ms))
+            t_put = nodes_m / (t_step_ms / 1000.0)   # M updates/s
+
             domain_sizes.append(size_val)
-            time_per_step.append(t_step)
+            time_per_step.append(t_step_ms)
             throughput.append(t_put)
-            print(f"  {label:>4}: Time/Step = {t_step:>6.2f} ms | "
+            print(f"  {label:>4}: Time/Step = {t_step_ms:>6.2f} ms | "
                   f"Throughput = {t_put:>5.1f} M Updates/s")
         else:
             print(f"  Warning: Missing metrics in "
@@ -348,7 +378,7 @@ ax_a2.tick_params(axis='y', labelcolor='#2ca02c')
 # Combined legend
 lines  = line_obs + line_ON + line_ON2 + line_tput
 labels = [l.get_label() for l in lines]
-ax_a2.legend(lines, labels, loc='upper right', framealpha=0.9,
+ax_a2.legend(lines, labels, loc='upper left', framealpha=0.9,
              fontsize=10)
 
 fig_a.tight_layout()

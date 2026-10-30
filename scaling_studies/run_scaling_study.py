@@ -191,7 +191,7 @@ class EnergyAudit:
 
     def report(self):
         data = np.array(self.history)
-        avg_step_time = np.mean(data[:, 3])
+        avg_step_time = np.mean(data[:, 4])
         nups = self.total_nodes / avg_step_time
 
         report_lines = [
@@ -377,7 +377,7 @@ def run_simulation(nx, ny, nz, output_dir, log_filename):
                             "energy_audit.csv")
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     np.savetxt(csv_path, audit_data, delimiter=",",
-               header="Time_ms,H_elec_J,P_diff_W,Compute_Sec",
+               header="Time_ms,H_elec_J,P_diff_W,P_mech_W,Compute_Sec",
                comments='')
 
     log_file.close()

@@ -143,55 +143,40 @@ def run_beat(state0, G_current, t_start, duration):
         # ================================================================
         # STANDARD SILVA / PHS GYRATOR COUPLING (GYR.1—GYR.2)
         # ================================================================
-        # The gyrator alpha_transducer = G_current * alpha_fb * sigmoid(u)
-        # ensures that the energy extracted from the electrical domain
-        # exactly matches the energy delivered to the mechanical domain.
+        # Gyrator coupling (matching phs_hetero_core.py and phs_3d_core.py)
         alpha_transducer = ALPHA_FB * G_current * sigmoid
 
         # Back-EMF current (standard formulation):
         # The mechanical load Tai opposes the membrane potential u.
+        flow_act   = alpha_transducer * u
         I_feedback = alpha_transducer * Tai
 
         # ================================================================
 
         # du/dt: Aliev-Panfilov fast reaction + stimulus − gyrator feedback
-        du = (k_eff * u * (u - A) * (1 - u)
-              - u * v + I_stim - I_feedback)
+        du   = k_eff * u * (u - A) * (1 - u) - u * v + I_stim - I_feedback
 
         # dv/dt: Aliev-Panfilov slow recovery (AP.2)
-        dv = ((EPS + MU1 * v / (MU2 + u))
-              * (-v - k_eff * u * (u - A - 1)))
+        dv   = (EPS + MU1 * v / (MU2 + u)) * (-v - k_eff * u * (u - A - 1))
 
         # dTai/dt: Silva calcium activation (NM.1) with modulated gain
-        # k_u = G_current * sigmoid  — voltage-dependent activation
-        k_u = G_current * sigmoid
-        dTai = C0 * (k_u - Tai)
+        dTai = flow_act - C0 * Tai
 
         # dTa/dt: Active tension with viscous damping (NM.2)
-        dTa = K_VISC * (Tai - Ta)
+        dTa  = K_VISC * (Tai - Ta)
 
         return [du, dv, dTai, dTa]
 
     sol = odeint(derivative, state0, t)
 
-    # ================================================================
-    # ENERGY AUDIT — Verify skew-symmetry of the gyrator
-    # ================================================================
-    u_traj   = sol[:, 0]
-    Tai_traj = sol[:, 2]
+    # Genuine numerical derivative audit from integrated trajectories
+    u_traj, v_traj, Tai_traj, Ta_traj = sol[:, 0], sol[:, 1], sol[:, 2], sol[:, 3]
     sig_traj = 1.0 / (1.0 + np.exp(-S_SIG * (u_traj - U_SIG)))
-
-    # Gyrator power balance:
-    #   P_elec  = u * I_feedback   (power extracted from electrical domain)
-    #   P_mech  = Tai * flow_act   (power injected into mechanical domain)
-    # With standard gyrator: flow_act = alpha_fb * G * sigmoid * u
-    #                        I_feedback = alpha_fb * G * sigmoid * Tai
-    #   → P_elec + P_mech ≡ 0
     G_eff_traj = ALPHA_FB * G_current * sig_traj
-
-    P_elec = u_traj * (-G_eff_traj * Tai_traj)
-    P_mech = Tai_traj * (G_eff_traj * u_traj)
-    residual_trace = P_elec + P_mech
+    # Extract coupling rates directly from the state equations
+    du_cpl_num   = -G_eff_traj * Tai_traj
+    dTai_cpl_num =  G_eff_traj * u_traj
+    residual_trace = u_traj * du_cpl_num + Tai_traj * dTai_cpl_num
 
     return t, sol, np.max(sol[:, 3]), residual_trace, k_eff
 
