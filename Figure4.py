@@ -292,7 +292,7 @@ ax2 = fig.add_subplot(gs[1, 0])
 # Left axis: inotropy gain G(t)
 l1, = ax2.step(total_t, total_G, where='post', color=COLOR_GAIN, lw=2,
                label='Inotropy gain')
-ax2.set_ylabel('Inotropy gain ($G$)', color=COLOR_GAIN)
+ax2.set_ylabel('Inotropy gain ($G_n$)', color=COLOR_GAIN)
 ax2.tick_params(axis='y', labelcolor=COLOR_GAIN)
 ax2.set_xlabel('Time (ms)')
 style_axis(ax2, 'b', dx=-0.18)
@@ -300,12 +300,12 @@ style_axis(ax2, 'b', dx=-0.18)
 # Right axis: metabolic rate k(t)
 ax2b = ax2.twinx()
 l2, = ax2b.step(total_t, total_k, where='post', color=COLOR_METAB,
-                lw=2, linestyle='--', label='Metabolism')
-ax2b.set_ylabel('Metabolic ($k$)', color=COLOR_METAB)
+                lw=2, linestyle='--', label='Excitation rate')
+ax2b.set_ylabel(r'Excitation rate $k_n$ ($\mathrm{ms}^{-1}$)', color=COLOR_METAB)
 ax2b.tick_params(axis='y', labelcolor=COLOR_METAB)
 style_axis(ax2b, twin=True)
 
-ax2.legend(handles=[l1, l2], loc='upper left', fontsize=10)
+ax2.legend(handles=[l1, l2], loc='upper left', fontsize=9.5)
 
 # --- Panel (c): Electromechanical phase space ---
 ax3 = fig.add_subplot(gs[1, 1])
